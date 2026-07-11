@@ -1,0 +1,17 @@
+[package]
+name = "battui"
+version = "0.1.0"
+edition = "2024"
+description = "ASCII battery indicator for your terminal — a live, inline ratatui TUI"
+license = "MIT"
+repository = "https://github.com/Ivapo/battui"
+
+[[bin]]
+name = "battery"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+ratatui = "0.29"
+crossterm = "0.28"
+starship-battery = "0.11"
