@@ -46,7 +46,8 @@ src/battery.rs  — starship-battery wrapper; never imports ratatui
 
 PanEx family (see `~/.claude/themes/panex-tui-style.md`): DarkGray bottom
 bar with `key:action` hints, yellow status messages. No frame or title —
-the inline strip is left-aligned like command output. Charge fill is
+the battery art is centered horizontally in the strip; the status line
+sits under its left edge. Charge fill is
 threshold-colored: Green > 50%, Yellow > 20%, Red otherwise; empty cells
 DarkGray `░`.
 

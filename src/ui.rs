@@ -31,16 +31,17 @@ pub fn draw(frame: &mut Frame, app: &App, show_bar: bool) {
 }
 
 fn draw_battery(frame: &mut Frame, area: Rect, snapshot: &Snapshot) {
-    // One column of left inset so the art doesn't hug the terminal edge.
-    let area = Rect {
-        x: area.x + 1,
-        width: area.width.saturating_sub(1),
-        ..area
-    };
     let body_w = area
         .width
         .saturating_sub(2)
         .clamp(MIN_BODY_WIDTH, MAX_BODY_WIDTH);
+    // Center the art block (box plus the 1-column nub) horizontally.
+    let inset = area.width.saturating_sub(body_w + 1) / 2;
+    let area = Rect {
+        x: area.x + inset,
+        width: area.width.saturating_sub(inset),
+        ..area
+    };
     let cells = body_w - 2;
     let filled = fill_cells(snapshot.percent, cells);
     let color = level_color(snapshot.percent);
