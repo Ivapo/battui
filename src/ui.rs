@@ -16,6 +16,12 @@ const FILL_ROWS: u16 = 3;
 const MAX_BODY_WIDTH: u16 = 46;
 const MIN_BODY_WIDTH: u16 = 14;
 
+const BUCKETS: u16 = 5;
+const BUCKET_GAP: u16 = 1;
+/// Blank columns between the box walls and the outermost buckets;
+/// matches the inter-bucket gap.
+const BUCKET_PAD: u16 = BUCKET_GAP;
+
 /// Inline-viewport height: battery box + blank + status line + hints bar.
 pub const VIEWPORT_HEIGHT: u16 = FILL_ROWS + 5;
 
@@ -43,27 +49,40 @@ fn draw_battery(frame: &mut Frame, area: Rect, snapshot: &Snapshot) {
         ..area
     };
     let cells = body_w - 2;
-    let filled = fill_cells(snapshot.percent, cells);
+    let widths = bucket_widths(cells - 2 * BUCKET_PAD, BUCKETS, BUCKET_GAP);
+    let filled = filled_buckets(snapshot.percent);
     let color = level_color(snapshot.percent);
 
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(format!("┌{}┐", "─".repeat(cells as usize))));
     for row in 0..FILL_ROWS {
         let nub = if row == FILL_ROWS / 2 { "▌" } else { "" };
-        lines.push(Line::from(vec![
-            Span::raw("│"),
-            Span::styled("█".repeat(filled as usize), Style::new().fg(color)),
-            Span::styled(
-                "░".repeat((cells - filled) as usize),
-                Style::new().fg(EMPTY_FILL),
-            ),
-            Span::raw("│"),
-            Span::raw(nub),
-        ]));
+        let mut spans = vec![Span::raw("│"), Span::raw(" ".repeat(BUCKET_PAD as usize))];
+        for (i, w) in widths.iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::raw(" ".repeat(BUCKET_GAP as usize)));
+            }
+            if (i as u16) < filled {
+                spans.push(Span::styled("█".repeat(*w as usize), Style::new().fg(color)));
+            } else {
+                spans.push(Span::styled(
+                    "░".repeat(*w as usize),
+                    Style::new().fg(EMPTY_FILL),
+                ));
+            }
+        }
+        spans.push(Span::raw(" ".repeat(BUCKET_PAD as usize)));
+        spans.push(Span::raw("│"));
+        spans.push(Span::raw(nub));
+        lines.push(Line::from(spans));
     }
     lines.push(Line::from(format!("└{}┘", "─".repeat(cells as usize))));
     lines.push(Line::default());
-    lines.push(status_line(snapshot, color));
+    // Center the status text under the box (nub excluded).
+    let mut status = status_line(snapshot, color);
+    let pad = body_w.saturating_sub(status.width() as u16) / 2;
+    status.spans.insert(0, Span::raw(" ".repeat(pad as usize)));
+    lines.push(status);
 
     frame.render_widget(Paragraph::new(lines), area);
 }
@@ -123,16 +142,26 @@ fn draw_bar(frame: &mut Frame, area: Rect, app: &App) {
 }
 
 fn level_color(percent: u8) -> Color {
-    match percent {
-        0..=20 => Color::Red,
-        21..=50 => Color::Yellow,
+    match filled_buckets(percent) {
+        0 | 1 => Color::Red,
+        2 => Color::Indexed(208), // orange; no named ANSI-16 equivalent
+        3 => Color::Yellow,
+        4 => Color::LightGreen,
         _ => Color::Green,
     }
 }
 
-/// Filled cells for a charge percentage, rounded to nearest.
-fn fill_cells(percent: u8, cells: u16) -> u16 {
-    ((u32::from(percent) * u32::from(cells) + 50) / 100) as u16
+/// Buckets lit for a charge percentage: one per started 20% band.
+fn filled_buckets(percent: u8) -> u16 {
+    u16::from(percent).div_ceil(20)
+}
+
+/// Per-bucket column widths; the first `usable % buckets` get the remainder.
+fn bucket_widths(cells: u16, buckets: u16, gap: u16) -> Vec<u16> {
+    let usable = cells.saturating_sub(gap * (buckets - 1));
+    let base = usable / buckets;
+    let rem = usable % buckets;
+    (0..buckets).map(|i| base + u16::from(i < rem)).collect()
 }
 
 fn format_hm(minutes: u32) -> String {
@@ -144,13 +173,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fill_cells_bounds_and_rounding() {
-        assert_eq!(fill_cells(0, 30), 0);
-        assert_eq!(fill_cells(100, 30), 30);
-        assert_eq!(fill_cells(50, 30), 15);
-        assert_eq!(fill_cells(1, 30), 0); // 0.3 rounds down
-        assert_eq!(fill_cells(2, 30), 1); // 0.6 rounds up
-        assert_eq!(fill_cells(99, 30), 30); // 29.7 rounds up
+    fn filled_buckets_band_edges() {
+        assert_eq!(filled_buckets(0), 0);
+        assert_eq!(filled_buckets(1), 1);
+        assert_eq!(filled_buckets(20), 1);
+        assert_eq!(filled_buckets(21), 2);
+        assert_eq!(filled_buckets(80), 4);
+        assert_eq!(filled_buckets(81), 5);
+        assert_eq!(filled_buckets(100), 5);
+    }
+
+    #[test]
+    fn bucket_widths_fill_the_row_exactly() {
+        // 10 and 42 are the min/max bucket areas after borders and padding.
+        for cells in [10, 29, 42] {
+            let widths = bucket_widths(cells, BUCKETS, BUCKET_GAP);
+            let total: u16 = widths.iter().sum::<u16>() + BUCKET_GAP * (BUCKETS - 1);
+            assert_eq!(total, cells, "cells={cells}");
+            assert!(widths.windows(2).all(|w| w[0] >= w[1] && w[0] - w[1] <= 1));
+        }
     }
 
     #[test]

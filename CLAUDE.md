@@ -47,9 +47,9 @@ src/battery.rs  — starship-battery wrapper; never imports ratatui
 PanEx family (see `~/.claude/themes/panex-tui-style.md`): DarkGray bottom
 bar with `key:action` hints, yellow status messages. No frame or title —
 the battery art is centered horizontally in the strip; the status line
-sits under its left edge. Charge fill is
-threshold-colored: Green > 50%, Yellow > 20%, Red otherwise; empty cells
-DarkGray `░`.
+is centered under the box (nub excluded). Charge shows as 5 discrete buckets (one per
+started 20% band), colored by band: Green 5, LightGreen 4, Yellow 3,
+orange (Indexed 208) 2, Red 1; unlit buckets DarkGray `░`.
 
 ## Running
 
@@ -95,8 +95,9 @@ correctness needs a real terminal; say so rather than claiming success.
 ## Coding Conventions
 
 - Rust edition 2024; `anyhow` for errors (`.context()` at boundaries).
-- Pure functions for anything computable (`fill_cells`, `format_hm`) — unit
-  test those; the rendering layer stays untested.
+- Pure functions for anything computable (`filled_buckets`,
+  `bucket_widths`, `format_hm`) — unit test those; the rendering layer
+  stays untested.
 - No async runtime, no threads — one cheap IOKit read every few seconds
   happens inline in the event loop.
 - `battery.rs` stays free of UI concerns; it never imports ratatui.
